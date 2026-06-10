@@ -1,4 +1,4 @@
-# chess_logic.py
+import copy
 
 class Piece:
     """Klasa bazowa dla wszystkich figur szachowych."""
@@ -20,29 +20,22 @@ class Pawn(Piece):
         direction = 1 if self.color == 'white' else -1
         start_row = 1 if self.color == 'white' else 6
         
-        # Ruch do przodu
         if board.get_piece(self.x, self.y + direction) is None:
             moves.append((self.x, self.y + direction))
             if self.y == start_row and board.get_piece(self.x, self.y + 2 * direction) is None:
                 moves.append((self.x, self.y + 2 * direction))
         
-        # Bicia (normalne oraz En Passant)
         for dx in [-1, 1]:
             target_x = self.x + dx
             target_y = self.y + direction
             if 0 <= target_x < 8 and 0 <= target_y < 8:
                 target_piece = board.get_piece(target_x, target_y)
                 
-                # Normalne bicie
                 if target_piece is not None and target_piece.color != self.color:
                     moves.append((target_x, target_y))
                 
-                # ==========================================
-                # --- BICIE W PRZELOCIE (Sprawdzenie celu) ---
-                # ==========================================
                 elif getattr(board, 'en_passant_target', None) == (target_x, target_y):
-                    moves.append((target_x, target_y))
-                    
+                    moves.append((target_x, target_y))        
         return moves
 
 class Rook(Piece):
@@ -133,8 +126,8 @@ class King(Piece):
                 if target_piece is None or target_piece.color != self.color:
                     moves.append((target_x, target_y))
                     
-        # Roszady
         if not self.has_moved:
+            # Roszada krótka
             rook_short = board.get_piece(7, self.y)
             if rook_short is not None and rook_short.__class__.__name__ == 'Rook' and not rook_short.has_moved:
                 if board.get_piece(5, self.y) is None and board.get_piece(6, self.y) is None:
@@ -143,6 +136,7 @@ class King(Piece):
                        not board.is_square_attacked(6, self.y, self.color):
                         moves.append((6, self.y)) 
                         
+            # Roszada długa
             rook_long = board.get_piece(0, self.y)
             if rook_long is not None and rook_long.__class__.__name__ == 'Rook' and not rook_long.has_moved:
                 if board.get_piece(1, self.y) is None and board.get_piece(2, self.y) is None and board.get_piece(3, self.y) is None:
@@ -159,7 +153,15 @@ class Board:
     def __init__(self):
         self.grid = [[None for _ in range(8)] for _ in range(8)]
         self.current_turn = 'white'
-        self.en_passant_target = None # NOWE: Pamięta pole do ewentualnego bicia w przelocie
+        self.en_passant_target = None 
+        
+        # Cmentarz figur
+        self.captured_white = []
+        self.captured_black = []
+        
+        # Historia ruchów (do cofania i odtwarzania)
+        self.history = []
+        
         self.setup_board()
 
     def setup_board(self):
@@ -170,6 +172,28 @@ class Board:
         for x, piece_class in enumerate(placement):
             self.grid[0][x] = piece_class('white', x, 0)
             self.grid[7][x] = piece_class('black', x, 7)
+
+    def save_state(self):
+        snapshot = {
+            'grid': copy.deepcopy(self.grid),
+            'current_turn': self.current_turn,
+            'en_passant_target': self.en_passant_target,
+            'captured_white': copy.deepcopy(self.captured_white),
+            'captured_black': copy.deepcopy(self.captured_black)
+        }
+        self.history.append(snapshot)
+
+    def undo_move(self):
+        if not self.history:
+            return False 
+            
+        last_state = self.history.pop()
+        self.grid = last_state['grid']
+        self.current_turn = last_state['current_turn']
+        self.en_passant_target = last_state['en_passant_target']
+        self.captured_white = last_state['captured_white']
+        self.captured_black = last_state['captured_black']
+        return True
 
     def get_piece(self, x, y):
         if 0 <= x < 8 and 0 <= y < 8:
@@ -213,7 +237,6 @@ class Board:
         for end_x, end_y in pseudo_moves:
             target_piece = self.grid[end_y][end_x]
             
-            # --- ZABEZPIECZENIE SYMULACJI (Usuwamy piona przy En Passant z pamięci) ---
             is_ep = False
             ep_captured = None
             if piece.__class__.__name__ == 'Pawn' and start_x != end_x and target_piece is None:
@@ -232,10 +255,9 @@ class Board:
             self.grid[end_y][end_x] = target_piece
             piece.x, piece.y = start_x, start_y
             
-            # Przywracamy usuniętego piona z symulacji
             if is_ep:
                 self.grid[start_y][end_x] = ep_captured
-                
+
         return legal_moves
 
     def is_checkmate(self, color):
@@ -257,39 +279,48 @@ class Board:
         legal_moves = self.get_legal_moves_for_piece(piece)
         
         if (end_x, end_y) in legal_moves:
-            # 1. Wykrywanie Roszady
+            # PRZED WYKONANIEM RUCHU ZAPISUJEMY STAN GRY
+            self.save_state()
+            
+            # Roszada
             if piece.__class__.__name__ == 'King' and abs(start_x - end_x) == 2:
-                if end_x == 6: # Krótka
+                if end_x == 6:
                     rook = self.grid[start_y][7]
                     self.grid[start_y][5] = rook
                     self.grid[start_y][7] = None
                     rook.x, rook.y = 5, start_y
                     rook.has_moved = True
-                elif end_x == 2: # Długa
+                elif end_x == 2:
                     rook = self.grid[start_y][0]
                     self.grid[start_y][3] = rook
                     self.grid[start_y][0] = None
                     rook.x, rook.y = 3, start_y
                     rook.has_moved = True
 
-            # ==========================================
-            # --- 2. LOGIKA BICIA W PRZELOCIE ---
-            # ==========================================
-            # Ustalenie, czy w kolejnej turze będzie można bić w przelocie
             next_ep_target = None
             if piece.__class__.__name__ == 'Pawn' and abs(end_y - start_y) == 2:
-                # Jeśli pion skoczył o 2, pole "za nim" staje się celem (target)
                 direction = 1 if piece.color == 'white' else -1
                 next_ep_target = (start_x, start_y + direction)
                 
-            # Wykonanie samego Bicia w Przelocie (jeśli pionek bije po skosie w puste pole)
+            # Bicie w przelocie (En Passant)
             if piece.__class__.__name__ == 'Pawn' and start_x != end_x and self.grid[end_y][end_x] is None:
-                # Oznacza to, że zbił w przelocie! Usuwamy ofiarę z boku
+                captured_ep = self.grid[start_y][end_x]
+                if captured_ep:
+                    if captured_ep.color == 'white':
+                        self.captured_white.append(captured_ep)
+                    else:
+                        self.captured_black.append(captured_ep)
                 self.grid[start_y][end_x] = None
-                print("BICIE W PRZELOCIE (En Passant) WYKONANE!")
-            # ==========================================
+
+            # Normalne bicie
+            target_piece = self.grid[end_y][end_x]
+            if target_piece is not None:
+                if target_piece.color == 'white':
+                    self.captured_white.append(target_piece)
+                else:
+                    self.captured_black.append(target_piece)
             
-            # Przesunięcie samej figury
+            # Przesunięcie figury
             self.grid[end_y][end_x] = piece
             self.grid[start_y][start_x] = None
             piece.x = end_x
@@ -303,7 +334,6 @@ class Board:
                 elif piece.color == 'black' and end_y == 0:
                     self.grid[end_y][end_x] = Queen('black', end_x, end_y)
             
-            # Aktualizacja dostępności bicia w przelocie na następną turę
             self.en_passant_target = next_ep_target
             
             if self.current_turn == 'white':
@@ -313,3 +343,24 @@ class Board:
                 
             return True
         return False
+
+    # ===============================================
+    # ODTWARZACZ PARTII (Replay)
+    # ===============================================
+    def get_current_state(self):
+        """Pobiera aktualny wygląd planszy do odtwarzacza."""
+        return {
+            'grid': copy.deepcopy(self.grid),
+            'current_turn': self.current_turn,
+            'en_passant_target': self.en_passant_target,
+            'captured_white': copy.deepcopy(self.captured_white),
+            'captured_black': copy.deepcopy(self.captured_black)
+        }
+
+    def load_state(self, state):
+        """Wymusza planszy wygląd z konkretnego momentu w historii."""
+        self.grid = copy.deepcopy(state['grid'])
+        self.current_turn = state['current_turn']
+        self.en_passant_target = state['en_passant_target']
+        self.captured_white = copy.deepcopy(state['captured_white'])
+        self.captured_black = copy.deepcopy(state['captured_black'])

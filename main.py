@@ -78,7 +78,9 @@ def get_board_square_from_mouse(mouse_x, mouse_y):
 
 def load_obj(filename):
     vertices, texcoords, normals, faces = [], [], [], []
-    if not os.path.exists(filename): return None
+    if not os.path.exists(filename): 
+        print(f"BRAK PLIKU: {filename}")
+        return None
     with open(filename, 'r') as f:
         for line in f:
             parts = line.split()
@@ -160,7 +162,10 @@ def draw_board(tex_white, tex_black, selected_square=None, valid_moves=None, fla
 
 def draw_pieces(board, models, tex_white, tex_black, anim_start=None, anim_end=None, anim_progress=0.0):
     glEnable(GL_TEXTURE_2D)
-    glMatrixMode(GL_TEXTURE); glPushMatrix(); glScalef(0.1, 0.1, 1.0); glMatrixMode(GL_MODELVIEW)
+    glMatrixMode(GL_TEXTURE)
+    glPushMatrix()
+    glScalef(0.1, 0.1, 1.0)
+    glMatrixMode(GL_MODELVIEW)
     
     def render_model(piece_obj, pos_x, pos_y, pos_z):
         name = piece_obj.__class__.__name__.lower()
@@ -174,12 +179,14 @@ def draw_pieces(board, models, tex_white, tex_black, anim_start=None, anim_end=N
             s = config['scale']; glScalef(s, s, s); glRotatef(config['rot_x'], 1, 0, 0); glCallList(models[name])
         glPopMatrix()
 
+    # 1. Rysowanie figur na planszy
     for z in range(8):
         for x in range(8):
             if anim_end and (x, z) == anim_end: continue
             piece = board.get_piece(x, z)
             if piece: render_model(piece, x - 3.5, 0, z - 3.5)
 
+    # 2. Rysowanie animacji w locie
     if anim_end:
         piece = board.get_piece(anim_end[0], anim_end[1])
         if piece:
@@ -188,12 +195,23 @@ def draw_pieces(board, models, tex_white, tex_black, anim_start=None, anim_end=N
             jump_height = math.sin(anim_progress * math.pi) * 1.5
             render_model(piece, cur_x - 3.5, jump_height, cur_z - 3.5)
 
-    if hasattr(board, 'captured_black'):
-        for i, piece in enumerate(board.captured_black): render_model(piece, -4.8 - (i % 2) * 0.8, 0, -3.5 + (i // 2) * 0.8)
-    if hasattr(board, 'captured_white'):
-        for i, piece in enumerate(board.captured_white): render_model(piece, 4.8 + (i % 2) * 0.8, 0, -3.5 + (i // 2) * 0.8)
+    # 3. Wyśrodkowany cmentarz czarnych
+    if hasattr(board, 'captured_black') and board.captured_black:
+        total_rows_b = (len(board.captured_black) - 1) // 2
+        start_z_b = -(total_rows_b * 0.8) / 2 
+        for i, piece in enumerate(board.captured_black): 
+            render_model(piece, -4.8 - (i % 2) * 0.8, 0, start_z_b + (i // 2) * 0.8)
 
-    glMatrixMode(GL_TEXTURE); glPopMatrix(); glMatrixMode(GL_MODELVIEW)
+    # 4. Wyśrodkowany cmentarz białych
+    if hasattr(board, 'captured_white') and board.captured_white:
+        total_rows_w = (len(board.captured_white) - 1) // 2
+        start_z_w = -(total_rows_w * 0.8) / 2
+        for i, piece in enumerate(board.captured_white): 
+            render_model(piece, 4.8 + (i % 2) * 0.8, 0, start_z_w + (i // 2) * 0.8)
+
+    glMatrixMode(GL_TEXTURE)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
 
 def main():
     pygame.init()
@@ -282,10 +300,7 @@ def main():
                         replay_mode = False
                         game_board.load_state(replay_history[-1])
                         pygame.display.set_caption("Szachy 3D - !!! SZACH MAT !!! (R - Restart gry)")
-                
-                # ===============================================
-                # STEROWANIE ZOOMEM Z KLAWIATURY (W/S lub +/-)
-                # ===============================================
+                        
                 elif event.key == pygame.K_w or event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS or event.key == pygame.K_KP_PLUS:
                     camera_distance = max(5.0, camera_distance - 1.0)
                 elif event.key == pygame.K_s or event.key == pygame.K_MINUS or event.key == pygame.K_KP_MINUS:
@@ -298,7 +313,6 @@ def main():
                 elif event.button == 3: 
                     is_dragging_camera = True
                     last_mouse_pos = pygame.mouse.get_pos()
-                # STEROWANIE ZOOMEM Z ROLKI MYSZKI
                 elif event.button == 4: 
                     camera_distance = max(5.0, camera_distance - 1.0)
                 elif event.button == 5: 

@@ -146,26 +146,78 @@ def create_display_list(vertices, texcoords, normals, faces):
     glEndList()
     return model_list
 
-def draw_board(selected_square=None, valid_moves=None, flash_square=None):
-    glDisable(GL_TEXTURE_2D)
+def draw_board(tex_white, tex_black, selected_square=None, valid_moves=None, flash_square=None):
+    glEnable(GL_TEXTURE_2D)
     if valid_moves is None: valid_moves = []
     
-    glBegin(GL_QUADS)
-    glNormal3f(0.0, 1.0, 0.0) # Informujemy światło, że płaska szachownica patrzy prosto w górę
-    
+    # --- 1. RYSOWANIE KAFELKÓW SZACHOWNICY ---
     for z in range(8):
         for x in range(8):
-            if flash_square == (x, z): glColor3f(0.8, 0.1, 0.1)
-            elif selected_square == (x, z): glColor3f(0.2, 0.8, 0.2)
-            elif (x, z) in valid_moves: glColor3f(0.2, 0.5, 1.0) 
-            elif (x + z) % 2 == 0: glColor3f(0.9, 0.8, 0.7)
-            else: glColor3f(0.4, 0.2, 0.1)
+            # Wybieramy teksturę drewna
+            if (x + z) % 2 == 0:
+                glBindTexture(GL_TEXTURE_2D, tex_white)
+            else:
+                glBindTexture(GL_TEXTURE_2D, tex_black)
+
+            # Mieszamy teksturę z kolorem podświetlenia (jeśli trzeba)
+            if flash_square == (x, z): glColor3f(1.0, 0.3, 0.3)      # Błąd - czerwony
+            elif selected_square == (x, z): glColor3f(0.5, 1.0, 0.5) # Zaznaczenie - zielony
+            elif (x, z) in valid_moves: glColor3f(0.5, 0.8, 1.0)     # Możliwy ruch - niebieski
+            else: glColor3f(1.0, 1.0, 1.0)                           # Czyste drewno
                 
             pos_x, pos_z = x - 4, z - 4
-            glVertex3f(pos_x, 0, pos_z)
-            glVertex3f(pos_x + 1, 0, pos_z)
-            glVertex3f(pos_x + 1, 0, pos_z + 1)
-            glVertex3f(pos_x, 0, pos_z + 1)
+            
+            # Rysujemy kwadrat naciągając na niego teksturę
+            glBegin(GL_QUADS)
+            glNormal3f(0.0, 1.0, 0.0) # Wektor dla światła (patrzy w górę)
+            glTexCoord2f(0.0, 0.0); glVertex3f(pos_x, 0, pos_z)
+            glTexCoord2f(1.0, 0.0); glVertex3f(pos_x + 1, 0, pos_z)
+            glTexCoord2f(1.0, 1.0); glVertex3f(pos_x + 1, 0, pos_z + 1)
+            glTexCoord2f(0.0, 1.0); glVertex3f(pos_x, 0, pos_z + 1)
+            glEnd()
+
+    # --- 2. RYSOWANIE GRUBEJ DREWNIANEJ BAZY/RAMKI ---
+    glBindTexture(GL_TEXTURE_2D, tex_black) # Zróbmy bazę z ciemnego drewna
+    glColor3f(0.8, 0.8, 0.8) # Lekko przyciemniamy dla kontrastu
+    
+    b = 4.3  # Rozmiar bazy (lekko wystaje poza pola, tworząc margines)
+    h = -0.6 # Grubość deski w dół
+    
+    glBegin(GL_QUADS)
+    # Margines górny (lekko poniżej kafelków, y = -0.01, żeby nie mrygało)
+    glNormal3f(0.0, 1.0, 0.0)
+    glTexCoord2f(0.0, 0.0); glVertex3f(-b, -0.01, -b)
+    glTexCoord2f(8.0, 0.0); glVertex3f(b, -0.01, -b)
+    glTexCoord2f(8.0, 8.0); glVertex3f(b, -0.01, b)
+    glTexCoord2f(0.0, 8.0); glVertex3f(-b, -0.01, b)
+    
+    # Przednia ściana
+    glNormal3f(0.0, 0.0, 1.0)
+    glTexCoord2f(0.0, 0.0); glVertex3f(-b, h, b)
+    glTexCoord2f(8.0, 0.0); glVertex3f(b, h, b)
+    glTexCoord2f(8.0, 1.0); glVertex3f(b, 0, b)
+    glTexCoord2f(0.0, 1.0); glVertex3f(-b, 0, b)
+    
+    # Tylna ściana
+    glNormal3f(0.0, 0.0, -1.0)
+    glTexCoord2f(0.0, 0.0); glVertex3f(b, h, -b)
+    glTexCoord2f(8.0, 0.0); glVertex3f(-b, h, -b)
+    glTexCoord2f(8.0, 1.0); glVertex3f(-b, 0, -b)
+    glTexCoord2f(0.0, 1.0); glVertex3f(b, 0, -b)
+    
+    # Lewa ściana
+    glNormal3f(-1.0, 0.0, 0.0)
+    glTexCoord2f(0.0, 0.0); glVertex3f(-b, h, -b)
+    glTexCoord2f(8.0, 0.0); glVertex3f(-b, h, b)
+    glTexCoord2f(8.0, 1.0); glVertex3f(-b, 0, b)
+    glTexCoord2f(0.0, 1.0); glVertex3f(-b, 0, -b)
+    
+    # Prawa ściana
+    glNormal3f(1.0, 0.0, 0.0)
+    glTexCoord2f(0.0, 0.0); glVertex3f(b, h, b)
+    glTexCoord2f(8.0, 0.0); glVertex3f(b, h, -b)
+    glTexCoord2f(8.0, 1.0); glVertex3f(b, 0, -b)
+    glTexCoord2f(0.0, 1.0); glVertex3f(b, 0, b)
     glEnd()
 
 def draw_pieces(board, models, tex_white, tex_black):
@@ -307,7 +359,7 @@ def main():
                 source_square = None
                 valid_moves = []
 
-        draw_board(source_square, valid_moves, flash_square)
+        draw_board(tex_white, tex_black, source_square, valid_moves, flash_square)
         draw_pieces(game_board, models, tex_white, tex_black)
         
         pygame.display.flip()

@@ -1,7 +1,8 @@
 import copy
 
+# klasa figury
+
 class Piece:
-    """Klasa bazowa dla wszystkich figur szachowych."""
     def __init__(self, color, x, y):
         self.color = color  
         self.x = x
@@ -13,6 +14,8 @@ class Piece:
 
     def __repr__(self):
         return f"{self.color[0].upper()}-{self.__class__.__name__[0]}"
+
+# logika konkretnych figur
 
 class Pawn(Piece):
     def get_valid_moves(self, board):
@@ -127,7 +130,6 @@ class King(Piece):
                     moves.append((target_x, target_y))
                     
         if not self.has_moved:
-            # Roszada krótka
             rook_short = board.get_piece(7, self.y)
             if rook_short is not None and rook_short.__class__.__name__ == 'Rook' and not rook_short.has_moved:
                 if board.get_piece(5, self.y) is None and board.get_piece(6, self.y) is None:
@@ -136,7 +138,6 @@ class King(Piece):
                        not board.is_square_attacked(6, self.y, self.color):
                         moves.append((6, self.y)) 
                         
-            # Roszada długa
             rook_long = board.get_piece(0, self.y)
             if rook_long is not None and rook_long.__class__.__name__ == 'Rook' and not rook_long.has_moved:
                 if board.get_piece(1, self.y) is None and board.get_piece(2, self.y) is None and board.get_piece(3, self.y) is None:
@@ -147,19 +148,16 @@ class King(Piece):
 
         return moves
 
+# szachownica i stan gry
 
-# --- GŁÓWNA KLASA ZARZĄDZAJĄCA PLANSZĄ ---
 class Board:
     def __init__(self):
         self.grid = [[None for _ in range(8)] for _ in range(8)]
         self.current_turn = 'white'
         self.en_passant_target = None 
         
-        # Cmentarz figur
         self.captured_white = []
         self.captured_black = []
-        
-        # Historia ruchów (do cofania i odtwarzania)
         self.history = []
         
         self.setup_board()
@@ -172,6 +170,13 @@ class Board:
         for x, piece_class in enumerate(placement):
             self.grid[0][x] = piece_class('white', x, 0)
             self.grid[7][x] = piece_class('black', x, 7)
+
+    def get_piece(self, x, y):
+        if 0 <= x < 8 and 0 <= y < 8:
+            return self.grid[y][x]
+        return None
+
+    # historia ruchów
 
     def save_state(self):
         snapshot = {
@@ -186,7 +191,6 @@ class Board:
     def undo_move(self):
         if not self.history:
             return False 
-            
         last_state = self.history.pop()
         self.grid = last_state['grid']
         self.current_turn = last_state['current_turn']
@@ -195,11 +199,10 @@ class Board:
         self.captured_black = last_state['captured_black']
         return True
 
-    def get_piece(self, x, y):
-        if 0 <= x < 8 and 0 <= y < 8:
-            return self.grid[y][x]
-        return None
 
+    
+    # szach i mat
+    
     def is_square_attacked(self, x, y, defender_color):
         for row in range(8):
             for col in range(8):
@@ -271,6 +274,8 @@ class Board:
                         return False 
         return True 
 
+    # wykonanie ruchu na planszy
+
     def move_piece(self, start_x, start_y, end_x, end_y):
         piece = self.get_piece(start_x, start_y)
         if piece is None:
@@ -279,10 +284,8 @@ class Board:
         legal_moves = self.get_legal_moves_for_piece(piece)
         
         if (end_x, end_y) in legal_moves:
-            # PRZED WYKONANIEM RUCHU ZAPISUJEMY STAN GRY
             self.save_state()
             
-            # Roszada
             if piece.__class__.__name__ == 'King' and abs(start_x - end_x) == 2:
                 if end_x == 6:
                     rook = self.grid[start_y][7]
@@ -302,7 +305,6 @@ class Board:
                 direction = 1 if piece.color == 'white' else -1
                 next_ep_target = (start_x, start_y + direction)
                 
-            # Bicie w przelocie (En Passant)
             if piece.__class__.__name__ == 'Pawn' and start_x != end_x and self.grid[end_y][end_x] is None:
                 captured_ep = self.grid[start_y][end_x]
                 if captured_ep:
@@ -312,7 +314,6 @@ class Board:
                         self.captured_black.append(captured_ep)
                 self.grid[start_y][end_x] = None
 
-            # Normalne bicie
             target_piece = self.grid[end_y][end_x]
             if target_piece is not None:
                 if target_piece.color == 'white':
@@ -320,14 +321,12 @@ class Board:
                 else:
                     self.captured_black.append(target_piece)
             
-            # Przesunięcie figury
             self.grid[end_y][end_x] = piece
             self.grid[start_y][start_x] = None
             piece.x = end_x
             piece.y = end_y
             piece.has_moved = True 
             
-            # Promocja Piona
             if piece.__class__.__name__ == 'Pawn':
                 if piece.color == 'white' and end_y == 7:
                     self.grid[end_y][end_x] = Queen('white', end_x, end_y)
@@ -344,11 +343,9 @@ class Board:
             return True
         return False
 
-    # ===============================================
-    # ODTWARZACZ PARTII (Replay)
-    # ===============================================
+    # odtwarzanie partii
+    
     def get_current_state(self):
-        """Pobiera aktualny wygląd planszy do odtwarzacza."""
         return {
             'grid': copy.deepcopy(self.grid),
             'current_turn': self.current_turn,
@@ -358,7 +355,6 @@ class Board:
         }
 
     def load_state(self, state):
-        """Wymusza planszy wygląd z konkretnego momentu w historii."""
         self.grid = copy.deepcopy(state['grid'])
         self.current_turn = state['current_turn']
         self.en_passant_target = state['en_passant_target']

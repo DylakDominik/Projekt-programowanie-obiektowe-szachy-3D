@@ -6,6 +6,8 @@ import os
 import math
 from chess_logic import Board
 
+# ustawienia modeli
+
 MODEL_CONFIG = {
     'pawn':   {'scale': 0.01, 'rot_x': -90},
     'rook':   {'scale': 0.01, 'rot_x': -90},
@@ -14,6 +16,8 @@ MODEL_CONFIG = {
     'queen':  {'scale': 0.01, 'rot_x': -90},
     'king':   {'scale': 0.01, 'rot_x': -90}
 }
+
+# tekstury i oświetlenie sceny
 
 def load_texture(filename):
     if not os.path.exists(filename):
@@ -51,6 +55,8 @@ def init_lighting():
     glMaterialf(GL_FRONT, GL_SHININESS, 60.0)                 
     glShadeModel(GL_SMOOTH) 
 
+# wykrywanie kliknięć 3D
+
 def get_board_square_from_mouse(mouse_x, mouse_y):
     try:
         modelview = glGetDoublev(GL_MODELVIEW_MATRIX)
@@ -76,11 +82,13 @@ def get_board_square_from_mouse(mouse_x, mouse_y):
         return None
     except Exception: return None
 
+
+
+# wczytywanie modeli
+
 def load_obj(filename):
     vertices, texcoords, normals, faces = [], [], [], []
-    if not os.path.exists(filename): 
-        print(f"BRAK PLIKU: {filename}")
-        return None
+    if not os.path.exists(filename): return None
     with open(filename, 'r') as f:
         for line in f:
             parts = line.split()
@@ -115,6 +123,8 @@ def create_display_list(vertices, texcoords, normals, faces):
         glEnd()
     glEndList()
     return model_list
+
+# rysowanie planszy i figur
 
 def draw_board(tex_white, tex_black, selected_square=None, valid_moves=None, flash_square=None):
     glEnable(GL_TEXTURE_2D)
@@ -179,14 +189,12 @@ def draw_pieces(board, models, tex_white, tex_black, anim_start=None, anim_end=N
             s = config['scale']; glScalef(s, s, s); glRotatef(config['rot_x'], 1, 0, 0); glCallList(models[name])
         glPopMatrix()
 
-    # 1. Rysowanie figur na planszy
     for z in range(8):
         for x in range(8):
             if anim_end and (x, z) == anim_end: continue
             piece = board.get_piece(x, z)
             if piece: render_model(piece, x - 3.5, 0, z - 3.5)
 
-    # 2. Rysowanie animacji w locie
     if anim_end:
         piece = board.get_piece(anim_end[0], anim_end[1])
         if piece:
@@ -195,14 +203,12 @@ def draw_pieces(board, models, tex_white, tex_black, anim_start=None, anim_end=N
             jump_height = math.sin(anim_progress * math.pi) * 1.5
             render_model(piece, cur_x - 3.5, jump_height, cur_z - 3.5)
 
-    # 3. Wyśrodkowany cmentarz czarnych
     if hasattr(board, 'captured_black') and board.captured_black:
         total_rows_b = (len(board.captured_black) - 1) // 2
         start_z_b = -(total_rows_b * 0.8) / 2 
         for i, piece in enumerate(board.captured_black): 
             render_model(piece, -4.8 - (i % 2) * 0.8, 0, start_z_b + (i // 2) * 0.8)
 
-    # 4. Wyśrodkowany cmentarz białych
     if hasattr(board, 'captured_white') and board.captured_white:
         total_rows_w = (len(board.captured_white) - 1) // 2
         start_z_w = -(total_rows_w * 0.8) / 2
@@ -212,6 +218,8 @@ def draw_pieces(board, models, tex_white, tex_black, anim_start=None, anim_end=N
     glMatrixMode(GL_TEXTURE)
     glPopMatrix()
     glMatrixMode(GL_MODELVIEW)
+
+# główna pętla gry i sterowanie
 
 def main():
     pygame.init()
@@ -377,8 +385,6 @@ def main():
         draw_board(tex_white, tex_black, source_square, valid_moves, flash_square)
         draw_pieces(game_board, models, tex_white, tex_black, anim_start, anim_end, anim_progress)
         pygame.display.flip(); pygame.time.wait(10)
-
-    pygame.quit()
 
 if __name__ == "__main__":
     main()
